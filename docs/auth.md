@@ -1,16 +1,19 @@
 # Authentication Methods
 
-Authentication data is attached to `auth`, profile is attached to `profile` if you provide a value to the `userProfile` config option. You can get them within components like so:
+Authentication data is attached to `state.firebase.auth`, profile is attached to `state.firebase.profile` if you provide a value to the `userProfile` config option. You can get them within components like so:
 
 ```js
 import { connect } from 'react-redux'
-connect(
-  // Map state to props
+
+const enhance = connect(
+  // Map redux state to component props
   ({ firebase: { auth, profile } }) => ({
     auth,
     profile
   })
 )
+
+enhance(SomeComponent)
 ```
 
 If you need access to methods that are not available at the top level, you can access Firebase's Full Auth API using `props.firebase.auth()` or `getFirebase().auth()`.
@@ -63,13 +66,14 @@ export default firebaseConnect()(SomeComponent) // or withFirebase(SomeComponent
         ```js
         {
           provider: "facebook | google | twitter",
-          type: "popup | redirect" // popup is default
+          type: "popup | redirect", // popup is default
+          scopes: Array // email is default
         }
         ```
       * credential (runs `ref.signInWithCredential(credential)`) :
         ```js
         {
-          credential : firebase.auth.AuthCredential // created using specific provider
+          credential: firebase.auth.AuthCredential // created using specific provider
         }
         ```
         The credential parameter is a firebase.auth.AuthCredential specific to the provider (i.e. `firebase.auth.GoogleAuthProvider.credential(null, 'some accessToken')`). For more details [please view the Firebase API reference](https://firebase.google.com/docs/reference/js/firebase.auth.GoogleAuthProvider#methods)
@@ -85,6 +89,13 @@ export default firebaseConnect()(SomeComponent) // or withFirebase(SomeComponent
         {
           token : String,
           profile: Object // required (optional if updateProfileOnLogin: false config set)
+        }
+        ```
+      * phone number (runs `ref.signInWithPhoneNumber(phoneNumber, applicationVerifier)`). Automatic profile creation is enabled by default if you are using the `userProfile` config option. `updateProfileOnLogin` config option can be set to `false` in order to prevent this behavior.
+        ```js
+        {
+          phoneNumber: String,
+          applicationVerifier: firebase.auth.ApplicationVerifier
         }
         ```
 
@@ -115,13 +126,14 @@ props.firebase.login({
 ```js
 props.firebase.login({
   provider: 'google',
-  type: 'popup'
+  type: 'popup',
+  // scopes: ['email'] // not required
 })
 ```
 
   *Credential*
 ```js
-// `googleUser` from the onsuccess Google Sign In callback.
+// `googleUser` from the onsuccess Google Sign In callback
 props.firebase.login({
   credential: firebase.auth.GoogleAuthProvider.credential(googleUser.getAuthResponse().id_token)
 })
@@ -257,23 +269,48 @@ props.firebase.verifyPasswordResetCode('some reset code')
 
 
 ## signInWithPhoneNumber(code)
-Verify a password reset code from password reset email.
 
-Calls Firebase's `firebase.auth().signInWithPhoneNumber()`. If there is an error, it is added into redux state under `state.firebase.authError`.
+Signs in using a phone number in an async pattern (i.e. requires calling a second method). Calls Firebase's [`firebase.auth().signInWithPhoneNumber()`](https://firebase.google.com/docs/reference/js/firebase.auth.Auth#signInWithPhoneNumber). If there is an error, it is added into redux state under `state.firebase.authError`.
+
+From Firebase's docs:
+
+> Asynchronously signs in using a phone number. This method sends a code via SMS to the given phone number, and returns a [firebase.auth.ConfirmationResult](https://firebase.google.com/docs/reference/js/firebase.auth.ConfirmationResult.html). After the user provides the code sent to their phone, call [firebase.auth.ConfirmationResult#confirm](https://firebase.google.com/docs/reference/js/firebase.auth.ConfirmationResult.html#confirm) with the code to sign the user in.
+
+For more info, check out the following:
+* [Firebase's phone-auth guide](https://firebase.google.com/docs/auth/web/phone-auth)
+* [Firebase's auth docs reference for signInWithPhoneNumber](https://firebase.google.com/docs/reference/js/firebase.auth.Auth#signInWithPhoneNumber)
 
 ##### Examples
 
 ```js
-props.firebase.signInWithPhoneNumber('some reset code')
+const phoneNumber = "+11234567899" // for US number (123) 456-7899
+const recaptchaVerifier = new firebase.auth.RecaptchaVerifier('sign-in-button', {
+  'size': 'invisible',
+});
+firebase.signInWithPhoneNumber(phoneNumber, appVerifier)
+    .then((confirmationResult) => {
+      // SMS sent. Prompt user to type the code from the message, then sign the
+      // user in with confirmationResult.confirm(code).
+      const verificationCode = window.prompt('Please enter the verification ' +
+          'code that was sent to your mobile device.');
+      return confirmationResult.confirm(verificationCode);
+    })
+    .catch((error) => {
+      // Error; SMS not sent
+      // Handle Errors Here
+      return Promise.reject(error)
+    });
 ```
 
 ##### Parameters
-  * `code` [**String**][string-url] - Password reset code
+  * `phoneNumber` [**String**][string-url] - The user's phone number in E.164 format (e.g. `+16505550101`).
+  * `applicationVerifier` [**firebase.auth.ApplicationVerifier**][firebase-app-verifier] `required` - App verifier made with Firebase's `RecaptchaVerifier`
 
 ##### Returns
-  [**Promise**][promise-url] - Email associated with reset code
+  [**Promise**][promise-url] - Resolves with [firebase.auth.ConfirmationResult](https://firebase.google.com/docs/reference/js/firebase.auth.ConfirmationResult.html)
 
 
 [promise-url]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise
 [string-url]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String
 [object-url]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object
+[firebase-app-verifier]: https://firebase.google.com/docs/reference/js/firebase.auth.ApplicationVerifier.html

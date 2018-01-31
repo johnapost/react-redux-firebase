@@ -28,8 +28,14 @@ let firebaseInstance
  * and auth state on login
  * @param {Object|Array} config.perserveOnLogout - Data parameters to perserve
  * when logging out. If Array is passed, each item represents keys
- * within state.firebase.data preserve. If an object is passed, Keys associate
- * with parts of state to preserve, and the values are Arrays which
+ * within `state.firebase.data` to preserve. If an object is passed,
+ * keys associate with slices of state to preserve, and the values can be either
+ * an `Array` or a `Function` (argument pattern: `(currentState, nextState)`).
+ * If passing an array of keys (i.e. `{ auth: ['key1', 'key2'] }`) - those keys
+ * (`'key1'` and `'key2'`) are preserved from that slice of state (`auth`). If
+ * passing a function (i.e.
+ * `{ auth: (currentAuthState, nextAuthState) => ({}) }`),
+ * whatever is returned from the function is set to that slice of state (`auth`).
  * associate with which keys to preserve form that section of state.
  * (default: `null`)
  * @param {Object} config.preserveOnEmptyAuthChange - `null` Data parameters to
@@ -83,27 +89,36 @@ let firebaseInstance
  * // Use Function later to create store
  * const store = createStoreWithFirebase(rootReducer, initialState)
  */
-export default (instance, otherConfig) => next =>
-  (reducer, initialState, middleware) => {
-    const store = next(reducer, initialState, middleware)
+export default (instance, otherConfig) => next => (
+  reducer,
+  initialState,
+  middleware
+) => {
+  const store = next(reducer, initialState, middleware)
 
-    // firebase library or app instance not being passed in as first argument
-    if (!instance.SDK_VERSION && !instance.firebase_ && !instance.database) {
-      throw new Error('v2.0.0-beta and higher require passing a firebase app instance or a firebase library instance. View the migration guide for details.')
-    }
-
-    const configs = { ...defaultConfig, ...otherConfig }
-    firebaseInstance = createFirebaseInstance(instance.firebase_ || instance, configs, store.dispatch)
-
-    authActions.init(store.dispatch, firebaseInstance)
-    store.firebase = firebaseInstance
-
-    if (configs.attachAuthIsReady) {
-      store.firebaseAuthIsReady = createAuthIsReady(store, configs)
-    }
-
-    return store
+  // firebase library or app instance not being passed in as first argument
+  if (!instance.SDK_VERSION && !instance.firebase_ && !instance.database) {
+    throw new Error(
+      'v2.0.0-beta and higher require passing a firebase app instance or a firebase library instance. View the migration guide for details.'
+    )
   }
+
+  const configs = { ...defaultConfig, ...otherConfig }
+  firebaseInstance = createFirebaseInstance(
+    instance.firebase_ || instance,
+    configs,
+    store.dispatch
+  )
+
+  authActions.init(store.dispatch, firebaseInstance)
+  store.firebase = firebaseInstance
+
+  if (configs.attachAuthIsReady) {
+    store.firebaseAuthIsReady = createAuthIsReady(store, configs)
+  }
+
+  return store
+}
 
 /**
  * @private
@@ -144,7 +159,9 @@ export const getFirebase = () => {
   // TODO: Handle recieveing config and creating firebase instance if it doesn't exist
   /* istanbul ignore next: Firebase instance always exists during tests */
   if (!firebaseInstance) {
-    throw new Error('Firebase instance does not yet exist. Check your compose function.') // eslint-disable-line no-console
+    throw new Error(
+      'Firebase instance does not yet exist. Check your compose function.'
+    ) // eslint-disable-line no-console
   }
   // TODO: Create new firebase here with config passed in
   return firebaseInstance
